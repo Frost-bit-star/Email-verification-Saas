@@ -1,28 +1,32 @@
 {
-  "name": "email-verification-server",
+  "name": "email-verification-api",
   "version": "1.0.0",
-  "description": "Email verification API using Node.js, Express, SQLite, and Nodemailer",
+  "description": "An Express.js server for email verification using Gmail, SQLite, and Nodemailer.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "keywords": [
     "express",
-    "sqlite",
     "nodemailer",
+    "sqlite3",
     "email-verification",
-    "render"
+    "gmail"
   ],
-  "author": "Morgan Miller",
+  "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "crypto": "^1.0.1",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.19.2",
-    "nodemailer": "^6.9.8",
+    "nodemailer": "^6.9.9",
     "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
