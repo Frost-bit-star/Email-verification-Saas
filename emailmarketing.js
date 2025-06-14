@@ -10,17 +10,24 @@ require('dotenv').config();
 const GITHUB_REPO = 'https://github.com/Frost-bit-star/stackverify.git';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const LOCAL_REPO_PATH = path.join(__dirname, 'repo-data');
+const DB_FILE = path.join(LOCAL_REPO_PATH, 'data.db');
 
 const router = express.Router();
 router.use(cors());
 router.use(express.json());
 
-// Git functions
+// Safe Git run
 function runGit(cmd) {
-  execSync(`git ${cmd}`, { cwd: LOCAL_REPO_PATH, stdio: 'inherit' });
+  try {
+    execSync(`git ${cmd}`, { cwd: LOCAL_REPO_PATH, stdio: 'inherit' });
+  } catch (err) {
+    console.error(`❌ Git error on command: git ${cmd}`, err.message);
+  }
 }
 
+// Git setup
 function setupGit() {
+  runGit('init'); // ensures repo is initialized
   runGit('config user.name "Frostbit Star"');
   runGit('config user.email "morganmilstone983@gmail.com"');
 }
@@ -35,7 +42,14 @@ function ensureMainBranch() {
 function cloneRepo() {
   if (!fs.existsSync(LOCAL_REPO_PATH)) {
     const tokenUrl = GITHUB_REPO.replace('https://', `https://${GITHUB_TOKEN}@`);
-    execSync(`git clone ${tokenUrl} repo-data`, { cwd: __dirname, stdio: 'inherit' });
+    try {
+      execSync(`git clone ${tokenUrl} repo-data`, { cwd: __dirname, stdio: 'inherit' });
+    } catch (e) {
+      console.warn('⚠️ Repo empty or clone failed. Initializing new repo.');
+      fs.mkdirSync(LOCAL_REPO_PATH, { recursive: true });
+      setupGit();
+      ensureMainBranch();
+    }
   }
 }
 
@@ -55,13 +69,23 @@ function pushToGitHub(msg = 'Backup: DB update') {
   }
 }
 
-// Initial repo setup
+// === INITIAL SETUP ===
 cloneRepo();
 pullFromGitHub();
 
-// SQLite setup
-const dbPath = path.join(LOCAL_REPO_PATH, 'data.db');
-const db = new sqlite3.Database(dbPath, err => {
+// Ensure DB exists
+if (!fs.existsSync(DB_FILE)) {
+  console.log('🆕 Creating new database file...');
+  fs.writeFileSync(DB_FILE, ''); // Create empty file
+  setupGit();
+  ensureMainBranch();
+  runGit('add .');
+  runGit('commit -m "Initial DB file created"');
+  runGit('push -u origin main');
+}
+
+// SQLite
+const db = new sqlite3.Database(DB_FILE, err => {
   if (err) console.error("❌ DB error:", err);
   else console.log("✅ EmailMarketing DB connected from Git repo");
 });
@@ -71,7 +95,7 @@ setInterval(() => {
   pushToGitHub('Backup: Automated 2-minute sync');
 }, 2 * 60 * 1000);
 
-// DB tables
+// Tables
 db.run(`CREATE TABLE IF NOT EXISTS marketers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   company TEXT UNIQUE NOT NULL,
@@ -87,7 +111,7 @@ db.run(`CREATE TABLE IF NOT EXISTS contacts (
   FOREIGN KEY(company) REFERENCES marketers(company)
 )`);
 
-// Nodemailer setup
+// Nodemailer
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -96,7 +120,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Email template
+// Email Template
 function emailTemplate({ brand, headline, subtext, message, cta, footer }) {
   return `<!DOCTYPE html>
   <html lang="en">
@@ -105,7 +129,6 @@ function emailTemplate({ brand, headline, subtext, message, cta, footer }) {
   <style>
     body { margin: 0; font-family: 'Segoe UI', sans-serif; background-color: #00c4a7; color: #fff; text-align: center; }
     .container { max-width: 480px; margin: auto; padding: 20px; }
-    .logo svg { width: 50px; height: 50px; }
     h2 { font-size: 1.5rem; font-weight: bold; color: #ff1744; }
     .msg { margin: 1rem 0; font-size: 0.95rem; color: #e0f7fa; }
     .btn { display: inline-block; padding: 12px 30px; background: #ff1744; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 1.5rem 0; }
@@ -121,9 +144,7 @@ function emailTemplate({ brand, headline, subtext, message, cta, footer }) {
   </div></body></html>`;
 }
 
-// === API Routes ===
-
-// ✅ Register Marketer
+// API Endpoints
 router.post('/marketer/register', (req, res) => {
   const { email, company } = req.body;
   if (!email || !company) return res.status(400).json({ message: 'Email and company name are required' });
@@ -136,7 +157,6 @@ router.post('/marketer/register', (req, res) => {
     });
 });
 
-// ✅ Add Customer Contact
 router.post('/marketer/:company/add-contact', (req, res) => {
   const company = req.params.company.toLowerCase();
   const { name, email } = req.body;
@@ -150,7 +170,6 @@ router.post('/marketer/:company/add-contact', (req, res) => {
     });
 });
 
-// ✅ Send Email to All Customers under Company
 router.post('/marketer/:company/send-email', (req, res) => {
   const company = req.params.company.toLowerCase();
   const { subject, brand, headline, subtext, message, cta, footer } = req.body;
