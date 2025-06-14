@@ -6,6 +6,10 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const emailMarketingRoutes = require('./emailmarketing');
+app.use('/api', emailMarketingRoutes);
+const notificationRoutes = require('./notification');
+app.use('/api', notificationRoutes);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
